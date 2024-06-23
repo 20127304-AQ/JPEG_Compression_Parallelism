@@ -30,7 +30,19 @@ windowSize = len(QTY)
 # read image
 imgOriginal = cv2.imread('marbles.bmp', cv2.IMREAD_COLOR)
 # convert BGR to YCrCb
-img = cv2.cvtColor(imgOriginal, cv2.COLOR_BGR2YCR_CB)
+# img = cv2.cvtColor(imgOriginal, cv2.COLOR_BGR2YCR_CB)
+img = bgr_to_ycrcb(imgOriginal)
+
+# TEST
+# cv2.imshow('Image 1', img)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+# # Display test_img
+# cv2.imshow('Image 2', test_img)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
 width = len(img[0])
 height = len(img)
 y = np.zeros((height, width), np.float32) + img[:, :, 0]
@@ -51,6 +63,18 @@ crf = cv2.boxFilter(cr, ddepth=-1, ksize=(2, 2))
 cbf = cv2.boxFilter(cb, ddepth=-1, ksize=(2, 2))
 crSub = crf[::SSV, ::SSH]
 cbSub = cbf[::SSV, ::SSH]
+
+crSub_2, cbSub_2 = subsample_chrominance(cr, cb, SSH, SSV)
+
+print("Differences in CR channel:")
+temp = np.abs(crSub - cbSub_2)
+
+count = 0
+different_indices = np.where(crSub != crSub_2)
+for i, j in zip(different_indices[0], different_indices[1]):
+    if count == 10: break
+    print(f"Difference at position ({i}, {j}): cr_subsampled={crSub[i, j]}, cr_subsampled={crSub_2[i, j]}")
+    count += 1
 
 # check if padding is needed,
 # if yes define empty arrays to pad each channel DCT with zeros if necessary
@@ -77,90 +101,90 @@ else:
             crPadded[i, j] += crSub[i, j]
             cbPadded[i, j] += cbSub[i, j]
 
-# get DCT of each channel
-# define three empty matrices
-yDct, crDct, cbDct = np.zeros((yLength, yWidth)), np.zeros((cLength, cWidth)), np.zeros((cLength, cWidth))
+# # get DCT of each channel
+# # define three empty matrices
+# yDct, crDct, cbDct = np.zeros((yLength, yWidth)), np.zeros((cLength, cWidth)), np.zeros((cLength, cWidth))
 
-# number of iteration on x axis and y axis to calculate the luminance cosine transform values
-hBlocksForY = int(len(yDct[0]) / windowSize)  # number of blocks in the horizontal direction for luminance
-vBlocksForY = int(len(yDct) / windowSize)  # number of blocks in the vertical direction for luminance
-# number of iteration on x axis and y axis to calculate the chrominance channels cosine transforms values
-hBlocksForC = int(len(crDct[0]) / windowSize)  # number of blocks in the horizontal direction for chrominance
-vBlocksForC = int(len(crDct) / windowSize)  # number of blocks in the vertical direction for chrominance
+# # number of iteration on x axis and y axis to calculate the luminance cosine transform values
+# hBlocksForY = int(len(yDct[0]) / windowSize)  # number of blocks in the horizontal direction for luminance
+# vBlocksForY = int(len(yDct) / windowSize)  # number of blocks in the vertical direction for luminance
+# # number of iteration on x axis and y axis to calculate the chrominance channels cosine transforms values
+# hBlocksForC = int(len(crDct[0]) / windowSize)  # number of blocks in the horizontal direction for chrominance
+# vBlocksForC = int(len(crDct) / windowSize)  # number of blocks in the vertical direction for chrominance
 
-# define 3 empty matrices to store the quantized values
-yq, crq, cbq = np.zeros((yLength, yWidth)), np.zeros((cLength, cWidth)), np.zeros((cLength, cWidth))
-# and another 3 for the zigzags
-yZigzag = np.zeros(((vBlocksForY * hBlocksForY), windowSize * windowSize))
-crZigzag = np.zeros(((vBlocksForC * hBlocksForC), windowSize * windowSize))
-cbZigzag = np.zeros(((vBlocksForC * hBlocksForC), windowSize * windowSize))
+# # define 3 empty matrices to store the quantized values
+# yq, crq, cbq = np.zeros((yLength, yWidth)), np.zeros((cLength, cWidth)), np.zeros((cLength, cWidth))
+# # and another 3 for the zigzags
+# yZigzag = np.zeros(((vBlocksForY * hBlocksForY), windowSize * windowSize))
+# crZigzag = np.zeros(((vBlocksForC * hBlocksForC), windowSize * windowSize))
+# cbZigzag = np.zeros(((vBlocksForC * hBlocksForC), windowSize * windowSize))
 
-yCounter = 0
-for i in range(vBlocksForY):
-    for j in range(hBlocksForY):
-        yDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = cv2.dct(
-            yPadded[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
-        yq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = np.ceil(
-            yDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] / QTY)
-        yZigzag[yCounter] += zigzag(
-            yq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
-        yCounter += 1
-yZigzag = yZigzag.astype(np.int16)
+# yCounter = 0
+# for i in range(vBlocksForY):
+#     for j in range(hBlocksForY):
+#         yDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = cv2.dct(
+#             yPadded[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
+#         yq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = np.ceil(
+#             yDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] / QTY)
+#         yZigzag[yCounter] += zigzag(
+#             yq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
+#         yCounter += 1
+# yZigzag = yZigzag.astype(np.int16)
 
-# either crq or cbq can be used to compute the number of blocks
-cCounter = 0
-for i in range(vBlocksForC):
-    for j in range(hBlocksForC):
-        crDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = cv2.dct(
-            crPadded[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
-        crq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = np.ceil(
-            crDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] / QTC)
-        crZigzag[cCounter] += zigzag(
-            crq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
-        cbDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = cv2.dct(
-            cbPadded[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
-        cbq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = np.ceil(
-            cbDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] / QTC)
-        cbZigzag[cCounter] += zigzag(
-            cbq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
-        cCounter += 1
-crZigzag = crZigzag.astype(np.int16)
-cbZigzag = cbZigzag.astype(np.int16)
+# # either crq or cbq can be used to compute the number of blocks
+# cCounter = 0
+# for i in range(vBlocksForC):
+#     for j in range(hBlocksForC):
+#         crDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = cv2.dct(
+#             crPadded[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
+#         crq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = np.ceil(
+#             crDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] / QTC)
+#         crZigzag[cCounter] += zigzag(
+#             crq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
+#         cbDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = cv2.dct(
+#             cbPadded[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
+#         cbq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] = np.ceil(
+#             cbDct[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize] / QTC)
+#         cbZigzag[cCounter] += zigzag(
+#             cbq[i * windowSize: i * windowSize + windowSize, j * windowSize: j * windowSize + windowSize])
+#         cCounter += 1
+# crZigzag = crZigzag.astype(np.int16)
+# cbZigzag = cbZigzag.astype(np.int16)
 
-# find the run length encoding for each channel
-# then get the frequency of each component in order to form a Huffman dictionary
-yEncoded = run_length_encoding(yZigzag)
-yFrequencyTable = get_freq_dict(yEncoded)
-yHuffman = find_huffman(yFrequencyTable)
+# # find the run length encoding for each channel
+# # then get the frequency of each component in order to form a Huffman dictionary
+# yEncoded = run_length_encoding(yZigzag)
+# yFrequencyTable = get_freq_dict(yEncoded)
+# yHuffman = find_huffman(yFrequencyTable)
 
-crEncoded = run_length_encoding(crZigzag)
-crFrequencyTable = get_freq_dict(crEncoded)
-crHuffman = find_huffman(crFrequencyTable)
+# crEncoded = run_length_encoding(crZigzag)
+# crFrequencyTable = get_freq_dict(crEncoded)
+# crHuffman = find_huffman(crFrequencyTable)
 
-cbEncoded = run_length_encoding(cbZigzag)
-cbFrequencyTable = get_freq_dict(cbEncoded)
-cbHuffman = find_huffman(cbFrequencyTable)
+# cbEncoded = run_length_encoding(cbZigzag)
+# cbFrequencyTable = get_freq_dict(cbEncoded)
+# cbHuffman = find_huffman(cbFrequencyTable)
 
-# calculate the number of bits to transmit for each channel
-# and write them to an output file
-file = open("CompressedImage.asfh", "w")
-yBitsToTransmit = str()
-for value in yEncoded:
-    yBitsToTransmit += yHuffman[value]
+# # calculate the number of bits to transmit for each channel
+# # and write them to an output file
+# file = open("CompressedImage.asfh", "w")
+# yBitsToTransmit = str()
+# for value in yEncoded:
+#     yBitsToTransmit += yHuffman[value]
 
-crBitsToTransmit = str()
-for value in crEncoded:
-    crBitsToTransmit += crHuffman[value]
+# crBitsToTransmit = str()
+# for value in crEncoded:
+#     crBitsToTransmit += crHuffman[value]
 
-cbBitsToTransmit = str()
-for value in cbEncoded:
-    cbBitsToTransmit += cbHuffman[value]
+# cbBitsToTransmit = str()
+# for value in cbEncoded:
+#     cbBitsToTransmit += cbHuffman[value]
 
-if file.writable():
-    file.write(yBitsToTransmit + "\n" + crBitsToTransmit + "\n" + cbBitsToTransmit)
-file.close()
+# if file.writable():
+#     file.write(yBitsToTransmit + "\n" + crBitsToTransmit + "\n" + cbBitsToTransmit)
+# file.close()
 
-totalNumberOfBitsAfterCompression = len(yBitsToTransmit) + len(crBitsToTransmit) + len(cbBitsToTransmit)
-print(
-    "Compression Ratio is " + str(
-        np.round(totalNumberOfBitsWithoutCompression / totalNumberOfBitsAfterCompression, 1)))
+# totalNumberOfBitsAfterCompression = len(yBitsToTransmit) + len(crBitsToTransmit) + len(cbBitsToTransmit)
+# print(
+#     "Compression Ratio is " + str(
+#         np.round(totalNumberOfBitsWithoutCompression / totalNumberOfBitsAfterCompression, 1)))

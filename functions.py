@@ -1,7 +1,105 @@
 from collections import Counter
 
+import cv2
 import numpy as np
 
+# Re-implement
+def bgr_to_ycrcb(image):
+    """
+    Convert a BGR image to YCrCb color space.
+
+    Parameters:
+    image (numpy.ndarray): BGR image
+
+    Returns:
+    numpy.ndarray: YCrCb image
+    """
+    # Define transformation matrices
+    bgr_to_y = np.array([0.299, 0.587, 0.114])
+    bgr_to_cb = np.array([-0.169, -0.331, 0.500])
+    bgr_to_cr = np.array([0.500, -0.419, -0.081])
+    
+    # Initialize the output image
+    ycrcb_image = np.zeros_like(image, dtype=np.float32)
+
+    # Apply transformation
+    ycrcb_image[:, :, 0] = np.dot(image, bgr_to_y.T) + 0
+    ycrcb_image[:, :, 1] = np.dot(image, bgr_to_cb.T) + 128
+    ycrcb_image[:, :, 2] = np.dot(image, bgr_to_cr.T) + 128
+    
+    return ycrcb_image.astype(np.uint8)
+
+# box_filter
+def box_filter(image, ksize=(2, 2)):
+  height, width = image.shape
+  filtered_image = np.zeros_like(image)
+  for i in range(height):
+    for j in range(width):
+      # Define the kernel boundaries
+      start_i = max(i - ksize[0] // 2, 0)
+      end_i = min(i + ksize[0] // 2 + 1, height)
+      start_j = max(j - ksize[1] // 2, 0)
+      end_j = min(j + ksize[1] // 2 + 1, width)
+
+      # Calculate the sum of pixel values within the kernel
+      kernel_sum = np.sum(image[start_i:end_i, start_j:end_j])
+
+      # Apply the mean filter
+      filtered_image[i, j] = kernel_sum / ((end_i - start_i) * (end_j - start_j))
+  return filtered_image
+
+# def box_filter(image, ksize=(2, 2)):
+#     height, width = image.shape
+#     filtered_image = np.zeros_like(image)
+#     for i in range(height):
+#         for j in range(width):
+#             # Define the kernel boundaries
+#             start_i = max(i - ksize[0] // 2, 0)
+#             end_i = min(i + ksize[0] // 2 + 1, height)
+#             start_j = max(j - ksize[1] // 2, 0)
+#             end_j = min(j + ksize[1] // 2 + 1, width)
+            
+#             # Apply the mean filter within the kernel
+#             filtered_image[i, j] = np.mean(image[start_i:end_i, start_j:end_j])
+#     return filtered_image
+
+# Subsampling function
+def subsample_chrominance(cr, cb, SSH=2, SSV=2):
+    # Apply box filter first
+    cr_filtered = box_filter(cr, ksize=(2, 2))
+    cb_filtered = box_filter(cb, ksize=(2, 2))
+    
+    # Now subsample
+    cr_subsampled = cr_filtered[::SSV, ::SSH]
+    cb_subsampled = cb_filtered[::SSV, ::SSH]
+
+    return round(cr_subsampled, 2), round(cb_subsampled, 2)
+
+# def subsample_chrominance(cr, cb, SSH=2, SSV=2):
+#     height, width = cr.shape
+
+#     # Calculate dimensions after subsampling
+#     subsampled_height = height // SSV + 1
+#     subsampled_width = width // SSH + 1
+
+#     # Initialize subsampled arrays
+#     cr_subsampled = np.zeros((subsampled_height, subsampled_width), dtype=np.float32)
+#     cb_subsampled = np.zeros((subsampled_height, subsampled_width), dtype=np.float32)
+
+#     # Perform subsampling
+#     for i in range(subsampled_height):
+#         for j in range(subsampled_width):
+#             # Calculate the start and end indices for averaging
+#             start_i = i * SSV
+#             end_i = start_i + SSV
+#             start_j = j * SSH
+#             end_j = start_j + SSH
+
+#             # Average over the block defined by start/end indices
+#             cr_subsampled[i, j] = np.mean(cr[start_i:end_i, start_j:end_j])
+#             cb_subsampled[i, j] = np.mean(cb[start_i:end_i, start_j:end_j])
+
+#     return cr_subsampled, cb_subsampled
 
 def zigzag(matrix: np.ndarray) -> np.ndarray:
     """
